@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Metro</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #fff; overflow: hidden; font-family: 'Helvetica Neue', Arial, sans-serif; }
+  canvas { display: block; cursor: default; }
+  #ui {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px; pointer-events: none; z-index: 10;
+  }
+  #score-box { font-size: 28px; font-weight: 300; color: #222; letter-spacing: 2px; }
+  #week-box { font-size: 13px; color: #888; letter-spacing: 1px; margin-top: 2px; }
+  #resources {
+    display: flex; gap: 14px; align-items: center; pointer-events: all;
+  }
+  .resource-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: #555; cursor: default;
+    user-select: none;
+  }
+  .resource-icon { width: 22px; height: 22px; }
+  #bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding: 0 20px 14px; pointer-events: none; z-index: 10;
+  }
+  #line-selector {
+    display: flex; gap: 10px; pointer-events: all;
+  }
+  .line-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer; transition: transform 0.1s, border-color 0.15s;
+    outline: none;
+    position: relative;
+  }
+  .line-btn:hover { transform: scale(1.12); }
+  .line-btn.active { border-color: #222; }
+  .line-btn.locked { opacity: 0.3; cursor: not-allowed; }
+  #overlay {
+    position: fixed; inset: 0; background: rgba(255,255,255,0.92);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; gap: 18px;
+  }
+  #overlay h1 { font-size: 52px; font-weight: 200; letter-spacing: 6px; color: #222; }
+  #overlay p { font-size: 15px; color: #777; letter-spacing: 1px; }
+  #overlay button {
+    margin-top: 10px; padding: 12px 40px;
+    background: #222; color: #fff; border: none;
+    font-size: 15px; letter-spacing: 2px; cursor: pointer;
+    font-family: inherit; font-weight: 300;
+  }
+  #overlay button:hover { background: #444; }
+  #game-over { display: none; }
+  #game-start { display: flex; }
+  #instructions {
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; color: #aaa; letter-spacing: 1px; text-align: center;
+    pointer-events: none; z-index: 10; white-space: nowrap;
+  }
+  #tunnel-count {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 13px; color: #555;
+  }
+  .tunnel-icon {
+    display: inline-block; width: 18px; height: 8px;
+    border-radius: 4px; background: #ccc;
+  }
+  #pause-btn {
+    position: fixed; top: 10px; right: 20px;
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; color: #aaa; pointer-events: all;
+    z-index: 11; letter-spacing: 2px;
+    font-family: inherit; font-weight: 300;
+  }
+  #pause-btn:hover { color: #555; }
+  #speed-btn {
+    position: fixed; top: 10px; right: 80px;
+    background: none; border: none; cursor: pointer;
+    font-size: 13px; color: #aaa; pointer-events: all;
+    z-index: 11; letter-spacing: 1px;
+    font-family: inherit;
+  }
+  #speed-btn:hover { color: #555; }
+  #weekly-reward {
+    position: fixed; inset: 0; background: rgba(255,255,255,0.95);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 90; gap: 20px;
+  }
+  #weekly-reward h2 { font-size: 28px; font-weight: 200; letter-spacing: 4px; color: #222; }
+  #weekly-reward p { font-size: 14px; color: #888; }
+  #reward-choices { display: flex; gap: 24px; }
+  .reward-card {
+    width: 130px; height: 130px;
+    border: 1.5px solid #ddd; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px;
+    cursor: pointer; transition: border-color 0.15s, transform 0.1s;
+    font-size: 12px; color: #777; letter-spacing: 1px;
+  }
+  .reward-card:hover { border-color: #222; transform: scale(1.04); }
+  .reward-card svg { width: 36px; height: 36px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div>
+    <div id="score-box">0</div>
+    <div id="week-box">WEEK 1</div>
+  </div>
+  <div id="resources">
+    <div class="resource-item" id="loco-res">
+      <svg class="resource-icon" viewBox="0 0 22 22"><rect x="2" y="7" width="15" height="9" rx="2" fill="#555"/><rect x="17" y="9" width="3" height="5" rx="1" fill="#555"/><circle cx="6" cy="17" r="2" fill="#555"/><circle cx="13" cy="17" r="2" fill="#555"/></svg>
+      <span id="loco-count">3</span>
+    </div>
+    <div class="resource-item" id="carriage-res">
+      <svg class="resource-icon" viewBox="0 0 22 22"><rect x="2" y="8" width="18" height="8" rx="2" fill="#888"/><circle cx="6" cy="17" r="2" fill="#888"/><circle cx="16" cy="17" r="2" fill="#888"/></svg>
+      <span id="carriage-count">2</span>
+    </div>
+    <div class="resource-item" id="tunnel-res">
+      <svg class="resource-icon" viewBox="0 0 22 22"><path d="M3 16 Q3 6 11 6 Q19 6 19 16" stroke="#888" stroke-width="2" fill="none"/><line x1="3" y1="16" x2="19" y2="16" stroke="#888" stroke-width="2"/></svg>
+      <span id="tunnel-count">0</span>
+    </div>
+  </div>
+</div>
+
+<button id="pause-btn">II</button>
+<button id="speed-btn">1x</button>
+
+<div id="bottom-bar">
+  <div id="line-selector"></div>
+</div>
+
+<div id="instructions">SELECT A LINE · CLICK STATIONS TO DRAW ROUTES · DRAG TRAINS</div>
+
+<div id="overlay">
+  <div id="game-start">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:18px">
+      <h1>MINI METRO</h1>
+      <p>BUILD YOUR UNDERGROUND RAILWAY NETWORK</p>
+      <div style="font-size:13px;color:#aaa;line-height:1.8;text-align:center;max-width:380px">
+        Click a coloured line below, then click stations to connect them.<br>
+        Each week you earn new trains, carriages, or tunnels.<br>
+        Stations overflow when passengers wait too long — don't let that happen.
+      </div>
+      <button onclick="startGame()">START</button>
+    </div>
+  </div>
+  <div id="game-over" style="display:none;flex-direction:column;align-items:center;gap:18px">
+    <h1>GAME OVER</h1>
+    <p id="final-score">YOU TRANSPORTED 0 PASSENGERS</p>
+    <button onclick="startGame()">PLAY AGAIN</button>
+  </div>
+</div>
+
+<div id="weekly-reward">
+  <h2>END OF WEEK <span id="reward-week"></span></h2>
+  <p>CHOOSE A REWARD</p>
+  <div id="reward-choices"></div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── CONSTANTS ───────────────────────────────────────────────
+const LINE_COLORS = ['#E8334A','#1D7ECA','#F0A500','#3BAD79','#8B5CF6','#E84393','#00B4D8'];
+const LINE_NAMES  = ['RED','BLUE','YELLOW','GREEN','PURPLE','PINK','CYAN'];
+const SHAPE_TYPES = ['circle','triangle','square','diamond','cross','star','pentagon'];
+const OVERFLOW_TIME = 22; // seconds before station overflows
+const PASSENGER_SPAWN_INTERVAL = 8; // seconds (decreases over time)
+const TRAIN_SPEED = 120; // px/s
+const MAX_PASSENGERS_PER_STATION = 8;
+const STATION_RADIUS = 14;
+
+// ─── STATE ───────────────────────────────────────────────────
+let state;
+
+function initState() {
+  state = {
+    score: 0,
+    week: 1,
+    time: 0,
+    paused: false,
+    speed: 1,
+    gameOver: false,
+    stations: [],
+    lines: [],
+    trains: [],
+    selectedLine: -1,
+    drawing: false,
+    drawingFrom: null,
+    mouseX: 0, mouseY: 0,
+    resources: { locos: 3, carriages: 2, tunnels: 0 },
+    nextStationIn: 20,
+    nextPassengerIn: 8,
+    weekTimer: 120, // seconds per week
+    animFrame: 0,
+    draggingTrain: null,
+    hoveredStation: null,
+    weekRewardShown: false,
+  };
+
+  // Unlock first 3 lines
+  for (let i = 0; i < LINE_COLORS.length; i++) {
+    state.lines.push({
+      id: i,
+      color: LINE_COLORS[i],
+      name: LINE_NAMES[i],
+      stations: [],
+      locked: i >= 3,
+      active: i < 3,
+    });
+  }
+
+  // Spawn initial stations
+  spawnStation('circle');
+  spawnStation('triangle');
+  spawnStation('square');
+
+  // Assign initial trains to lines
+  assignTrain(0);
+  assignTrain(1);
+  assignTrain(2);
+
+  updateUI();
+}
+
+// ─── STATION SHAPES ──────────────────────────────────────────
+function spawnStation(shapeOverride) {
+  const margin = 80;
+  let x, y, attempts = 0;
+  do {
+    x = margin + Math.random() * (W - margin * 2);
+    y = 80 + Math.random() * (H - 180);
+    attempts++;
+  } while (attempts < 50 && state.stations.some(s => dist(s.x, s.y, x, y) < 120));
+
+  const shapes = SHAPE_TYPES.slice(0, Math.min(3 + Math.floor(state.week / 2), 7));
+  const shape = shapeOverride || shapes[Math.floor(Math.random() * shapes.length)];
+
+  state.stations.push({
+    id: state.stations.length,
+    x, y, shape,
+    passengers: [],
+    overflowTimer: 0,
+    pulse: 0,
+    overflowing: false,
+  });
+}
+
+// ─── DRAWING HELPERS ─────────────────────────────────────────
+function drawStation(s, highlight) {
+  const r = STATION_RADIUS;
+  ctx.save();
+  ctx.translate(s.x, s.y);
+
+  // Overflow pulse ring
+  if (s.overflowing) {
+    const pulse = 0.5 + 0.5 * Math.sin(state.time * 6);
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 8 + pulse * 6, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(232,51,74,${0.4 + pulse * 0.4})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Shadow
+  ctx.shadowColor = 'rgba(0,0,0,0.15)';
+  ctx.shadowBlur = 8;
+
+  ctx.fillStyle = highlight ? '#555' : '#fff';
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = highlight ? 3 : 2.5;
+
+  ctx.beginPath();
+  switch (s.shape) {
+    case 'circle':
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      break;
+    case 'triangle':
+      ctx.moveTo(0, -r);
+      ctx.lineTo(r * 0.87, r * 0.5);
+      ctx.lineTo(-r * 0.87, r * 0.5);
+      ctx.closePath();
+      break;
+    case 'square':
+      ctx.rect(-r * 0.82, -r * 0.82, r * 1.64, r * 1.64);
+      break;
+    case 'diamond':
+      ctx.moveTo(0, -r * 1.1);
+      ctx.lineTo(r * 0.85, 0);
+      ctx.lineTo(0, r * 1.1);
+      ctx.lineTo(-r * 0.85, 0);
+      ctx.closePath();
+      break;
+    case 'cross':
+      ctx.rect(-r * 0.32, -r, r * 0.64, r * 2);
+      ctx.rect(-r, -r * 0.32, r * 2, r * 0.64);
+      break;
+    case 'star':
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 4 * Math.PI / 5) - Math.PI / 2;
+        const b = (i * 4 * Math.PI / 5 + 2 * Math.PI / 5) - Math.PI / 2;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+        ctx.lineTo(Math.cos(b) * r * 0.45, Math.sin(b) * r * 0.45);
+      }
+      ctx.closePath();
+      break;
+    case 'pentagon':
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 2 * Math.PI / 5) - Math.PI / 2;
+        if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
+      break;
+  }
+
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.stroke();
+
+  ctx.restore();
+
+  // Draw passengers as small icons around station
+  drawPassengers(s);
+}
+
+function drawPassengerIcon(shape, x, y, size, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color || '#555';
+  ctx.strokeStyle = color || '#555';
+  ctx.lineWidth = 1;
+
+  switch(shape) {
+    case 'circle':
+      ctx.beginPath(); ctx.arc(0, 0, size, 0, Math.PI * 2); ctx.fill(); break;
+    case 'triangle':
+      ctx.beginPath();
+      ctx.moveTo(0, -size); ctx.lineTo(size * 0.87, size * 0.5); ctx.lineTo(-size * 0.87, size * 0.5);
+      ctx.closePath(); ctx.fill(); break;
+    case 'square':
+      ctx.fillRect(-size, -size, size * 2, size * 2); break;
+    case 'diamond':
+      ctx.beginPath(); ctx.moveTo(0, -size * 1.1); ctx.lineTo(size * 0.85, 0);
+      ctx.lineTo(0, size * 1.1); ctx.lineTo(-size * 0.85, 0); ctx.closePath(); ctx.fill(); break;
+    case 'cross':
+      ctx.fillRect(-size * 0.3, -size, size * 0.6, size * 2);
+      ctx.fillRect(-size, -size * 0.3, size * 2, size * 0.6); break;
+    case 'star':
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 4 * Math.PI / 5) - Math.PI / 2;
+        const b = (i * 4 * Math.PI / 5 + 2 * Math.PI / 5) - Math.PI / 2;
+        if (i === 0) ctx.moveTo(Math.cos(a) * size, Math.sin(a) * size);
+        else ctx.lineTo(Math.cos(a) * size, Math.sin(a) * size);
+        ctx.lineTo(Math.cos(b) * size * 0.5, Math.sin(b) * size * 0.5);
+      }
+      ctx.closePath(); ctx.fill(); break;
+    case 'pentagon':
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 2 * Math.PI / 5) - Math.PI / 2;
+        if (i === 0) ctx.moveTo(Math.cos(a) * size, Math.sin(a) * size);
+        else ctx.lineTo(Math.cos(a) * size, Math.sin(a) * size);
+      }
+      ctx.closePath(); ctx.fill(); break;
+    default:
+      ctx.beginPath(); ctx.arc(0, 0, size, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawPassengers(s) {
+  const cols = 4;
+  const iconSize = 4;
+  const gap = 10;
+  const startX = s.x - (Math.min(s.passengers.length, cols) - 1) * gap / 2;
+  const row0Y = s.y + STATION_RADIUS + 12;
+
+  s.passengers.forEach((p, i) => {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const px = startX + col * gap;
+    const py = row0Y + row * gap;
+    const urgency = p.waitTime / OVERFLOW_TIME;
+    const r = Math.floor(80 + urgency * 175);
+    const color = `rgb(${r},${Math.floor(80 * (1 - urgency))},${Math.floor(80 * (1 - urgency))})`;
+    drawPassengerIcon(p.shape, px, py, iconSize, color);
+  });
+}
+
+function drawLine(line) {
+  if (line.stations.length < 2) return;
+
+  // Draw thick line with rounded joins
+  ctx.save();
+  ctx.strokeStyle = line.color;
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.85;
+
+  ctx.beginPath();
+  const pts = line.stations.map(id => state.stations[id]);
+
+  // Draw segments with slight offset if lines share segments
+  for (let i = 0; i < pts.length - 1; i++) {
+    ctx.moveTo(pts[i].x, pts[i].y);
+    ctx.lineTo(pts[i+1].x, pts[i+1].y);
+  }
+  ctx.stroke();
+
+  // Highlight selected line
+  if (state.selectedLine === line.id && state.drawing) {
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5;
+    ctx.setLineDash([6, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+}
+
+function drawTrain(train) {
+  const line = state.lines[train.lineId];
+  if (!line || line.stations.length < 2) return;
+
+  ctx.save();
+  ctx.translate(train.x, train.y);
+
+  const angle = Math.atan2(train.dy, train.dx);
+  ctx.rotate(angle);
+
+  const w = 28 + train.carriages * 16;
+  const h = 13;
+
+  // Body
+  ctx.fillStyle = line.color;
+  ctx.beginPath();
+  ctx.roundRect(-w/2, -h/2, w, h, 4);
+  ctx.fill();
+
+  // Window strip
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(-w/2 + 5, -h/2 + 3, w - 10, h - 6);
+
+  // Passengers inside
+  const passengerSpots = 3 + train.carriages * 2;
+  const filled = Math.min(train.passengers.length, passengerSpots);
+  for (let i = 0; i < filled; i++) {
+    const p = train.passengers[i];
+    const ix = -w/2 + 8 + i * ((w - 16) / passengerSpots);
+    drawPassengerIcon(p.shape, ix, 0, 2.5, '#fff');
+  }
+
+  ctx.restore();
+}
+
+function drawGhostLine() {
+  if (!state.drawing || state.drawingFrom === null || state.selectedLine < 0) return;
+  const from = state.stations[state.drawingFrom];
+  const line = state.lines[state.selectedLine];
+  if (!from || !line) return;
+
+  ctx.save();
+  ctx.strokeStyle = line.color;
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.4;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(state.mouseX, state.mouseY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// ─── TRAIN LOGIC ─────────────────────────────────────────────
+function assignTrain(lineId) {
+  if (state.resources.locos <= 0) return false;
+  const line = state.lines[lineId];
+  if (!line) return false;
+
+  state.resources.locos--;
+  state.trains.push({
+    id: state.trains.length,
+    lineId,
+    stationIndex: 0,
+    direction: 1,
+    x: line.stations.length ? state.stations[line.stations[0]].x : W/2,
+    y: line.stations.length ? state.stations[line.stations[0]].y : H/2,
+    dx: 0, dy: 1,
+    progress: 0,
+    waiting: 0,
+    passengers: [],
+    carriages: 0,
+    atStation: line.stations.length > 0 ? 0 : null,
+  });
+  return true;
+}
+
+function updateTrains(dt) {
+  state.trains.forEach(train => {
+    const line = state.lines[train.lineId];
+    if (!line || line.stations.length < 2) return;
+
+    if (train.waiting > 0) {
+      train.waiting -= dt;
+      if (train.waiting <= 0) {
+        train.waiting = 0;
+        train.atStation = null;
+      }
+      return;
+    }
+
+    const fromIdx = train.stationIndex;
+    let toIdx = train.stationIndex + train.direction;
+
+    if (toIdx >= line.stations.length) {
+      train.direction = -1;
+      toIdx = fromIdx - 1;
+      if (toIdx < 0) { toIdx = 0; }
+    }
+    if (toIdx < 0) {
+      train.direction = 1;
+      toIdx = fromIdx + 1;
+      if (toIdx >= line.stations.length) { toIdx = line.stations.length - 1; }
+    }
+
+    if (toIdx === fromIdx) return;
+
+    const from = state.stations[line.stations[fromIdx]];
+    const to   = state.stations[line.stations[toIdx]];
+    if (!from || !to) return;
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist_ = Math.sqrt(dx*dx + dy*dy);
+
+    train.dx = dx / dist_;
+    train.dy = dy / dist_;
+
+    const spd = TRAIN_SPEED * state.speed;
+    train.progress += (spd * dt) / dist_;
+
+    train.x = from.x + dx * train.progress;
+    train.y = from.y + dy * train.progress;
+
+    if (train.progress >= 1) {
+      train.progress = 0;
+      train.stationIndex = toIdx;
+      train.x = to.x;
+      train.y = to.y;
+      trainArrive(train, to);
+    }
+  });
+}
+
+function trainArrive(train, station) {
+  const line = state.lines[train.lineId];
+  train.atStation = train.stationIndex;
+
+  // Disembark passengers whose destination shape matches
+  const disembarked = train.passengers.filter(p => p.shape === station.shape);
+  const kept = train.passengers.filter(p => p.shape !== station.shape);
+  state.score += disembarked.length * 10;
+  train.passengers = kept;
+
+  // Board passengers waiting at this station whose shape appears elsewhere on line
+  const capacity = 3 + train.carriages * 2;
+  const lineStationShapes = line.stations.map(id => state.stations[id].shape);
+
+  const toBoard = station.passengers.filter(p => {
+    // Passenger wants to go somewhere on this line that isn't this station
+    return lineStationShapes.includes(p.shape) && p.shape !== station.shape;
+  });
+
+  let boarded = 0;
+  while (train.passengers.length < capacity && toBoard.length > 0) {
+    const p = toBoard.shift();
+    const idx = station.passengers.indexOf(p);
+    if (idx >= 0) station.passengers.splice(idx, 1);
+    train.passengers.push(p);
+    boarded++;
+  }
+
+  // Wait at station
+  train.waiting = 1.2;
+  updateScoreDisplay();
+}
+
+// ─── PASSENGER SPAWNING ───────────────────────────────────────
+function spawnPassengers(dt) {
+  state.nextPassengerIn -= dt * state.speed;
+  if (state.nextPassengerIn <= 0) {
+    const interval = Math.max(3, PASSENGER_SPAWN_INTERVAL - state.week * 0.4);
+    state.nextPassengerIn = interval * (0.6 + Math.random() * 0.8);
+
+    // Pick a random station
+    const station = state.stations[Math.floor(Math.random() * state.stations.length)];
+    if (!station) return;
+
+    // Destination is a random shape that exists in a different station
+    const otherShapes = [...new Set(state.stations.filter(s => s !== station).map(s => s.shape))];
+    if (otherShapes.length === 0) return;
+    const destShape = otherShapes[Math.floor(Math.random() * otherShapes.length)];
+
+    if (station.passengers.length < MAX_PASSENGERS_PER_STATION) {
+      station.passengers.push({ shape: destShape, waitTime: 0 });
+    }
+  }
+}
+
+// ─── OVERFLOW CHECK ───────────────────────────────────────────
+function updateOverflow(dt) {
+  let overflow = false;
+  state.stations.forEach(s => {
+    s.passengers.forEach(p => {
+      p.waitTime += dt * state.speed;
+    });
+
+    const maxWait = s.passengers.reduce((m, p) => Math.max(m, p.waitTime), 0);
+    s.overflowing = maxWait > OVERFLOW_TIME * 0.7;
+
+    if (maxWait > OVERFLOW_TIME) {
+      overflow = true;
+    }
+  });
+
+  if (overflow) {
+    triggerGameOver();
+  }
+}
+
+function triggerGameOver() {
+  state.gameOver = true;
+  state.paused = true;
+  document.getElementById('final-score').textContent = `YOU TRANSPORTED ${state.score} PASSENGERS`;
+  document.getElementById('game-over').style.display = 'flex';
+  document.getElementById('game-start').style.display = 'none';
+  document.getElementById('overlay').style.display = 'flex';
+}
+
+// ─── WEEK SYSTEM ──────────────────────────────────────────────
+function updateWeek(dt) {
+  state.weekTimer -= dt * state.speed;
+  if (state.weekTimer <= 0) {
+    state.weekTimer = 120;
+    state.week++;
+    document.getElementById('week-box').textContent = `WEEK ${state.week}`;
+
+    // Spawn new station
+    const shapes = SHAPE_TYPES.slice(0, Math.min(3 + Math.floor(state.week / 2), 7));
+    spawnStation(shapes[Math.floor(Math.random() * shapes.length)]);
+
+    // Show reward screen
+    showWeeklyReward();
+  }
+}
+
+function showWeeklyReward() {
+  state.paused = true;
+  document.getElementById('reward-week').textContent = state.week - 1;
+
+  const choices = [
+    { type: 'loco', label: 'TRAIN', icon: `<svg viewBox="0 0 36 22"><rect x="2" y="5" width="24" height="13" rx="3" fill="#555"/><rect x="26" y="8" width="6" height="7" rx="2" fill="#555"/><circle cx="8" cy="19" r="3" fill="#555"/><circle cx="19" cy="19" r="3" fill="#555"/></svg>` },
+    { type: 'carriage', label: 'CARRIAGE', icon: `<svg viewBox="0 0 36 22"><rect x="2" y="7" width="32" height="10" rx="3" fill="#888"/><circle cx="8" cy="18" r="3" fill="#888"/><circle cx="28" cy="18" r="3" fill="#888"/></svg>` },
+    { type: 'tunnel', label: 'TUNNEL', icon: `<svg viewBox="0 0 36 22"><path d="M4 20 Q4 4 18 4 Q32 4 32 20" stroke="#888" stroke-width="3" fill="none"/><line x1="4" y1="20" x2="32" y2="20" stroke="#888" stroke-width="3"/></svg>` },
+  ];
+
+  // Sometimes unlock a new line
+  const lockedLines = state.lines.filter(l => l.locked);
+  if (lockedLines.length > 0 && Math.random() < 0.4) {
+    const line = lockedLines[0];
+    choices[2] = { type: 'newline', lineId: line.id, label: `${line.name} LINE`, icon: `<svg viewBox="0 0 36 12"><line x1="2" y1="6" x2="34" y2="6" stroke="${line.color}" stroke-width="6" stroke-linecap="round"/></svg>` };
+  }
+
+  const container = document.getElementById('reward-choices');
+  container.innerHTML = '';
+  choices.forEach(choice => {
+    const card = document.createElement('div');
+    card.className = 'reward-card';
+    card.innerHTML = `${choice.icon}<span>${choice.label}</span>`;
+    card.onclick = () => applyReward(choice);
+    container.appendChild(card);
+  });
+
+  document.getElementById('weekly-reward').style.display = 'flex';
+}
+
+function applyReward(choice) {
+  document.getElementById('weekly-reward').style.display = 'none';
+  state.paused = false;
+
+  switch (choice.type) {
+    case 'loco': state.resources.locos++; break;
+    case 'carriage': state.resources.carriages++; break;
+    case 'tunnel': state.resources.tunnels++; break;
+    case 'newline':
+      state.lines[choice.lineId].locked = false;
+      state.lines[choice.lineId].active = true;
+      break;
+  }
+  updateUI();
+}
+
+// ─── STATION SPAWNING ─────────────────────────────────────────
+function updateStationSpawn(dt) {
+  state.nextStationIn -= dt * state.speed;
+  if (state.nextStationIn <= 0) {
+    const interval = Math.max(30, 60 - state.week * 2);
+    state.nextStationIn = interval;
+    const shapes = SHAPE_TYPES.slice(0, Math.min(3 + Math.floor(state.week / 2), 7));
+    spawnStation(shapes[Math.floor(Math.random() * shapes.length)]);
+  }
+}
+
+// ─── UI ──────────────────────────────────────────────────────
+function updateUI() {
+  document.getElementById('score-box').textContent = state.score;
+  document.getElementById('loco-count').textContent = state.resources.locos;
+  document.getElementById('carriage-count').textContent = state.resources.carriages;
+  document.getElementById('tunnel-count').textContent = state.resources.tunnels;
+
+  const sel = document.getElementById('line-selector');
+  sel.innerHTML = '';
+  state.lines.forEach(line => {
+    if (!line.active) return;
+    const btn = document.createElement('button');
+    btn.className = 'line-btn' + (line.locked ? ' locked' : '') + (state.selectedLine === line.id ? ' active' : '');
+    btn.style.background = line.locked ? '#ddd' : line.color;
+    btn.title = line.name + ' LINE' + (line.locked ? ' (locked)' : '');
+    btn.onclick = () => {
+      if (line.locked) return;
+      if (state.selectedLine === line.id) {
+        state.selectedLine = -1;
+      } else {
+        state.selectedLine = line.id;
+      }
+      updateUI();
+    };
+    sel.appendChild(btn);
+  });
+}
+
+function updateScoreDisplay() {
+  document.getElementById('score-box').textContent = state.score;
+}
+
+// ─── INTERACTION ──────────────────────────────────────────────
+function getStationAt(x, y) {
+  for (let i = state.stations.length - 1; i >= 0; i--) {
+    const s = state.stations[i];
+    if (dist(s.x, s.y, x, y) < STATION_RADIUS + 8) return i;
+  }
+  return -1;
+}
+
+function getTrainAt(x, y) {
+  for (let t of state.trains) {
+    if (dist(t.x, t.y, x, y) < 20) return t;
+  }
+  return null;
+}
+
+canvas.addEventListener('mousedown', e => {
+  const mx = e.clientX, my = e.clientY;
+  state.mouseX = mx; state.mouseY = my;
+  if (state.gameOver || state.paused) return;
+
+  const si = getStationAt(mx, my);
+
+  if (state.selectedLine >= 0) {
+    if (si >= 0) {
+      const line = state.lines[state.selectedLine];
+      if (!line || line.locked) return;
+
+      // Check if station already on this line
+      if (line.stations.includes(si)) {
+        // Clicked an existing station — start drawing from it (extend or remove)
+        state.drawing = true;
+        state.drawingFrom = si;
+      } else {
+        // Add station to line
+        if (!state.drawing) {
+          line.stations.push(si);
+          state.drawing = true;
+          state.drawingFrom = si;
+        }
+      }
+    } else {
+      // Clicked empty — cancel drawing
+      state.drawing = false;
+      state.drawingFrom = null;
+    }
+  } else {
+    // Try drag train
+    const t = getTrainAt(mx, my);
+    if (t) state.draggingTrain = t;
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  state.mouseX = e.clientX; state.mouseY = e.clientY;
+  const si = getStationAt(e.clientX, e.clientY);
+  state.hoveredStation = si;
+});
+
+canvas.addEventListener('mouseup', e => {
+  const mx = e.clientX, my = e.clientY;
+
+  if (state.drawing && state.selectedLine >= 0) {
+    const si = getStationAt(mx, my);
+    if (si >= 0 && si !== state.drawingFrom) {
+      const line = state.lines[state.selectedLine];
+      if (line && !line.locked) {
+        if (!line.stations.includes(si)) {
+          // Insert after drawingFrom
+          const fromPos = line.stations.indexOf(state.drawingFrom);
+          if (fromPos === line.stations.length - 1) {
+            line.stations.push(si);
+          } else if (fromPos === 0) {
+            line.stations.unshift(si);
+          } else {
+            line.stations.push(si);
+          }
+          state.drawingFrom = si;
+        }
+      }
+    }
+  }
+
+  if (state.draggingTrain) {
+    // Drop on a line button? - handled by line buttons
+    state.draggingTrain = null;
+  }
+
+  state.drawing = false;
+  state.drawingFrom = null;
+});
+
+// Right click to remove last station from selected line
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (state.selectedLine < 0) return;
+  const line = state.lines[state.selectedLine];
+  if (!line || line.stations.length === 0) return;
+  const si = getStationAt(e.clientX, e.clientY);
+  if (si >= 0 && line.stations.includes(si)) {
+    line.stations = line.stations.filter(s => s !== si);
+  } else {
+    line.stations.pop();
+  }
+});
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.code === 'Space') {
+    e.preventDefault();
+    if (!state.gameOver) togglePause();
+  }
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const active = state.lines.filter(l => !l.locked);
+    if (active.length === 0) return;
+    const cur = active.findIndex(l => l.id === state.selectedLine);
+    const next = active[(cur + 1) % active.length];
+    state.selectedLine = next.id;
+    updateUI();
+  }
+  // Number keys to select lines
+  if (e.key >= '1' && e.key <= '7') {
+    const idx = parseInt(e.key) - 1;
+    if (state.lines[idx] && !state.lines[idx].locked) {
+      state.selectedLine = state.selectedLine === idx ? -1 : idx;
+      updateUI();
+    }
+  }
+});
+
+document.getElementById('pause-btn').onclick = () => {
+  if (!state || state.gameOver) return;
+  togglePause();
+};
+
+document.getElementById('speed-btn').onclick = () => {
+  if (!state) return;
+  state.speed = state.speed === 1 ? 2 : state.speed === 2 ? 3 : 1;
+  document.getElementById('speed-btn').textContent = state.speed + 'x';
+};
+
+function togglePause() {
+  state.paused = !state.paused;
+  document.getElementById('pause-btn').textContent = state.paused ? '▶' : 'II';
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────
+let lastTime = 0;
+
+function loop(ts) {
+  requestAnimationFrame(loop);
+  const dt = Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
+
+  if (!state) return;
+
+  state.time = ts / 1000;
+
+  if (!state.paused && !state.gameOver) {
+    updateTrains(dt);
+    spawnPassengers(dt);
+    updateOverflow(dt);
+    updateWeek(dt);
+    updateStationSpawn(dt);
+  }
+
+  // Draw
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw lines
+  state.lines.forEach(l => drawLine(l));
+
+  // Ghost line while drawing
+  drawGhostLine();
+
+  // Draw stations
+  state.stations.forEach((s, i) => {
+    drawStation(s, state.hoveredStation === i);
+  });
+
+  // Draw trains
+  state.trains.forEach(t => drawTrain(t));
+
+  // Week progress bar
+  const weekProgress = 1 - (state.weekTimer / 120);
+  ctx.fillStyle = '#eee';
+  ctx.fillRect(0, H - 3, W, 3);
+  ctx.fillStyle = '#222';
+  ctx.fillRect(0, H - 3, W * weekProgress, 3);
+}
+
+// ─── START ────────────────────────────────────────────────────
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('game-over').style.display = 'none';
+  document.getElementById('game-start').style.display = 'flex';
+  document.getElementById('weekly-reward').style.display = 'none';
+
+  initState();
+
+  // Connect initial stations to lines
+  state.lines[0].stations = [0];
+  state.lines[1].stations = [1];
+  state.lines[2].stations = [2];
+
+  // Position trains at their station
+  state.trains.forEach(t => {
+    const line = state.lines[t.lineId];
+    if (line.stations.length > 0) {
+      const s = state.stations[line.stations[0]];
+      t.x = s.x; t.y = s.y;
+    }
+  });
+
+  updateUI();
+  lastTime = performance.now();
+}
+
+function dist(ax, ay, bx, by) {
+  const dx = ax - bx, dy = ay - by;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+// Start the render loop
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
